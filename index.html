@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Home Finder · Montgomery County</title>
+<meta name="theme-color" content="#1f6b5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Home Finder">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --bg:#f3f5f4; --surface:#fff; --fg:#17201d; --muted:#5a6863; --line:#d9e0dd;
+  --accent:#1f6b5c; --accent-soft:#e1efeb;
+  --condo:#2b6cb0; --town:#1d7a3e; --house:#c05621;
+  --good:#1d7a3e; --good-bg:#e3f3e8; --warn:#9a6200; --warn-bg:#fbf0d9;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+header{background:var(--accent);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px}
+header h1{font-size:1.05rem;margin:0;flex:1}
+header small{opacity:.85;font-size:.75rem;display:block;font-weight:400}
+header button{background:#fff;color:var(--accent);border:0;border-radius:8px;padding:7px 10px;font-weight:700;font-size:.85rem}
+#map{height:46vh;min-height:260px;width:100%}
+.bar{position:sticky;top:0;z-index:500;background:var(--surface);border-bottom:1px solid var(--line);padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:6px 10px;font-size:.82rem;color:var(--fg)}
+.seg button.on{background:var(--accent);color:#fff}
+.bar select,.bar label{font-size:.82rem}
+.bar select{padding:5px;border-radius:8px;border:1px solid var(--line);background:var(--surface)}
+.bar label{display:flex;gap:4px;align-items:center}
+.count{margin-left:auto;color:var(--muted);font-size:.78rem}
+#list{padding:10px;display:grid;gap:10px;padding-bottom:90px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:8px}
+.card.top{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.card.sel{outline:3px solid #f0b429}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.addr{font-weight:700;font-size:1rem}
+.where{color:var(--muted);font-size:.82rem}
+.price{font-weight:800;font-size:1.15rem;white-space:nowrap;text-align:right}
+.price small{display:block;font-weight:400;font-size:.72rem;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-size:.74rem;padding:2px 8px;border-radius:999px;background:#eaeef3;color:#3b4f66;font-weight:600}
+.chip.t-condo{background:#e3edf9;color:var(--condo)}
+.chip.t-town{background:var(--good-bg);color:var(--town)}
+.chip.t-house{background:#fbe9dc;color:var(--house)}
+.chip.good{background:var(--good-bg);color:var(--good)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.pick{background:var(--accent);color:#fff}
+.notes{font-size:.86rem;margin:0}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btns a,.btns button{flex:1 1 auto;text-align:center;text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:8px 6px;
+  font-size:.82rem;font-weight:700;color:var(--accent);background:var(--surface)}
+.btns a.go{background:var(--accent);color:#fff;border-color:var(--accent)}
+.mine{display:flex;gap:8px;align-items:center;font-size:.8rem;color:var(--muted)}
+.mine textarea{flex:1;font:inherit;font-size:.82rem;border:1px solid var(--line);border-radius:8px;padding:6px;min-height:34px;resize:vertical}
+.tour{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:1000;display:none;gap:8px}
+.tour.show{display:flex}
+.tour a,.tour button{flex:1;border:0;border-radius:12px;padding:13px;font-weight:800;font-size:.95rem;text-align:center;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.tour a{background:#f0b429;color:#17201d}
+.tour button{flex:0 0 auto;background:var(--surface);color:var(--fg)}
+.foot{color:var(--muted);font-size:.75rem;padding:0 4px}
+.legend{background:#fff;padding:6px 8px;border-radius:8px;font-size:.75rem;line-height:1.6;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.leaflet-popup-content{font-size:.85rem;margin:10px 12px}
+.leaflet-popup-content a{font-weight:700}
+.me{width:16px;height:16px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 2px #1a73e8}
+</style>
+</head>
+<body>
+<header>
+  <h1>Home Finder<small>Condos ≤ $220K · houses ≤ $300K · near Kensington, MD</small></h1>
+  <button id="locate" type="button">📍 Near me</button>
+</header>
+
+<div id="map" role="application" aria-label="Map of listings"></div>
+
+<div class="bar" role="group" aria-label="Filters">
+  <div class="seg" id="typeSeg">
+    <button data-t="all" class="on">All</button>
+    <button data-t="condo">Condos</button>
+    <button data-t="town">Townhouses</button>
+    <button data-t="house">Houses</button>
+  </div>
+  <select id="sort" aria-label="Sort">
+    <option value="kens">Closest to Kensington</option>
+    <option value="me">Closest to me</option>
+    <option value="price">Price</option>
+  </select>
+  <label><input type="checkbox" id="fBath"> 2+ baths</label>
+  <label><input type="checkbox" id="fDog"> Dogs OK</label>
+  <label><input type="checkbox" id="fHide"> Hide visited</label>
+  <span class="count" id="count"></span>
+</div>
+
+<div id="list"></div>
+
+<p class="foot" style="padding:0 14px 110px">
+Listings checked on <b id="asof"></b>. Prices and status change fast, so confirm with the agent before visiting.
+Condo fees and pet rules are from the listings where shown; "Check" means the listing didn't say.
+Distances are straight-line. Tap <b>Add to tour</b> on several homes, then <b>Start tour</b> to open them as one route in Google Maps.
+Your notes and visited marks are saved only on this phone.
+</p>
+
+<div class="tour" id="tour">
+  <button id="clearTour" type="button">Clear</button>
+  <a id="tourGo" href="#" target="_blank" rel="noopener">Start tour</a>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ======================================================================
+   DATA: edit this list to add, remove or update homes.
+   type: "condo" | "town" | "house"
+   dog:  "yes" | "limit" | "check"
+   fee:  monthly condo/HOA fee if known, otherwise null
+   ====================================================================== */
+const AS_OF = "Nov 21, 2026";
+const KENSINGTON = {lat: 39.0257, lon: -77.0764, name: "Kensington (Howard Ave)"};
+
+const HOMES = [
+  // ---------- Houses and townhouses up to $300K ----------
+  {id:"h1", type:"house", addr:"1932 Merrimac Dr", city:"Hyattsville", zip:"20783", price:299900, bd:3, ba:1.5, sf:945, lat:38.989694, lon:-76.972058, fee:null, dog:"yes",
+   status:"Active", notes:"Detached brick rancher. Young roof and furnace, upgraded electrical panel. Prince George's County, about 15 min from Kensington."},
+  {id:"h2", type:"town", addr:"1812 East West Hwy", city:"Silver Spring", zip:"20910", price:290000, bd:2, ba:1, sf:750, lat:38.996095, lon:-77.040598, fee:null, dog:"yes",
+   status:"Active", notes:"Colonial townhouse in Chevy Chase Crest, off-street parking. Community covers lawn and road maintenance. About 10 min to Kensington."},
+  {id:"h3", type:"town", addr:"1760 East West Hwy", city:"Silver Spring", zip:"20910", price:235000, bd:2, ba:1, sf:750, lat:38.995216, lon:-77.038302, fee:null, dog:"check",
+   status:"Active", notes:"Two-level townhouse condo with front and rear entrances and a rear outdoor area. Near the Red Line and buses. Condo fee applies: ask how much."},
+  {id:"h4", type:"town", addr:"9668 Brassie Way", city:"Montgomery Village", zip:"20886", price:293500, bd:2, ba:2, sf:988, lat:39.175078, lon:-77.201653, fee:null, dog:"yes",
+   status:"Active · $14K price drop", notes:"Thomas Choice West. Two renovated full baths: the best roommate layout among the houses."},
+  {id:"h5", type:"town", addr:"9810 Feathertree Ter #C", city:"Montgomery Village", zip:"20886", price:280000, bd:2, ba:3, sf:1446, lat:39.158902, lon:-77.206876, fee:null, dog:"check",
+   status:"Active · $20K price drop", notes:"Two-level home, 2 bedrooms and 3 baths. Listing doesn't say if it is a townhouse or condo: ask about fees."},
+  {id:"h6", type:"town", addr:"18645 Nathans Pl", city:"Montgomery Village", zip:"20886", price:285000, bd:2, ba:1, sf:1068, lat:39.1598, lon:-77.2008, fee:null, dog:"yes",
+   status:"Active · $52K price drop", notes:"End-unit townhouse in Nathans Hill. Big recent price cut: room to negotiate. Map pin is approximate."},
+  {id:"h7", type:"town", addr:"10216 Ridgeline Dr", city:"Montgomery Village", zip:"20886", price:289999, bd:2, ba:1.5, sf:978, lat:39.174571, lon:-77.207196, fee:null, dog:"yes",
+   status:"Active · $28K price drop", notes:"Townhouse marketed as an alternative to a condo."},
+  {id:"h8", type:"town", addr:"19484 Brassie Pl", city:"Montgomery Village", zip:"20886", price:298000, bd:2, ba:1, sf:1080, lat:39.174880, lon:-77.201736, fee:null, dog:"yes",
+   status:"Active", notes:"Townhouse near Thomas Choice West."},
+  {id:"h9", type:"town", addr:"18759 Nathans Pl", city:"Montgomery Village", zip:"20886", price:299000, bd:2, ba:1, sf:960, lat:39.160947, lon:-77.200208, fee:null, dog:"yes",
+   status:"Active", notes:"Colonial townhouse in Nathans Hill, community pool. Some listing photos are virtually staged."},
+
+  // ---------- Condos up to $220K ----------
+  {id:"c1", top:1, type:"condo", addr:"3421 University Blvd W #3421-2", city:"Kensington", zip:"20895", price:209900, bd:2, ba:1, sf:781, lat:39.035286, lon:-77.068887, fee:570, dog:"yes",
+   status:"Active · $15K price drop", notes:"In Kensington itself, about 5 min from her sister. Dogs allowed with no restrictions. Small, shared laundry. Heat and electric extra."},
+  {id:"c2", type:"condo", addr:"3333 University Blvd W #704", city:"Kensington", zip:"20895", price:220000, bd:2, ba:2, sf:1534, lat:39.035459, lon:-77.067161, fee:1100, dog:"limit",
+   status:"Active · $30K price drop", notes:"The Waterford high-rise: front desk, rooftop pool. Fee includes all utilities but is the highest here. Dog breed limits."},
+  {id:"c3", top:1, type:"condo", addr:"11505 Amherst Ave", city:"Wheaton", zip:"20902", price:210000, bd:2, ba:1, sf:940, lat:39.043423, lon:-77.047808, fee:414, dog:"yes",
+   status:"Active · down from $219K", notes:"Sierra Landing. Lowest monthly cost near Kensington (about 10 min). Dogs OK, washer/dryer in unit, renovated. 1 mi to Wheaton Metro."},
+  {id:"c4", type:"condo", addr:"11601 Elkin St #1", city:"Wheaton", zip:"20902", price:210000, bd:2, ba:1, sf:940, lat:39.044861, lon:-77.047899, fee:403, dog:"limit",
+   status:"Active · down from $215K", notes:"Sierra Landing. Very low fee that includes heat. FHA approved. Dog weight limit: confirm."},
+  {id:"c5", type:"condo", addr:"3974 Bel Pre Rd #6", city:"Aspen Hill", zip:"20906", price:219000, bd:2, ba:2, sf:1016, lat:39.093667, lon:-77.077471, fee:727, dog:"yes",
+   status:"Active (confirmed)", notes:"Grand Bel. 2 full baths, washer/dryer in unit, all utilities in the fee. Renovated kitchen and baths."},
+  {id:"c6", type:"condo", addr:"3954 Bel Pre Rd #4", city:"Aspen Hill", zip:"20906", price:205000, bd:2, ba:2, sf:1016, lat:39.0937, lon:-77.0771, fee:null, dog:"check",
+   status:"Active", notes:"Renovated 2-bath unit, likely the same complex as 3974. Ask about fee and pets. Map pin is approximate."},
+  {id:"c7", type:"condo", addr:"3934 Bel Pre Rd #2", city:"Aspen Hill", zip:"20906", price:190000, bd:2, ba:2, sf:976, lat:39.093736, lon:-77.076868, fee:null, dog:"check",
+   status:"Active", notes:"2 full baths under $200K."},
+  {id:"c8", type:"condo", addr:"3970 Bel Pre Rd #7", city:"Aspen Hill", zip:"20906", price:180000, bd:2, ba:1, sf:942, lat:39.0936, lon:-77.0774, fee:null, dog:"check",
+   status:"Active · $10K price drop", notes:"Condo fee includes all utilities. Map pin is approximate."},
+  {id:"c9", type:"condo", addr:"3720 Bel Pre Rd #1", city:"Aspen Hill", zip:"20906", price:210000, bd:3, ba:1, sf:1017, lat:39.093292, lon:-77.074245, fee:null, dog:"check",
+   status:"Active · $5K price drop", notes:"3 bedrooms, all utilities included in the fee."},
+  {id:"c10", type:"condo", addr:"2503 McVeary Ct", city:"Aspen Hill", zip:"20906", price:215000, bd:2, ba:2, sf:922, lat:39.103083, lon:-77.051901, fee:565, dog:"yes",
+   status:"Active", notes:"Longmead Crossing. 2 full baths, washer/dryer in unit, pool and tennis. Utilities extra."},
+  {id:"c11", type:"condo", addr:"2501 McVeary Ct", city:"Aspen Hill", zip:"20906", price:184900, bd:2, ba:2, sf:922, lat:39.1032, lon:-77.0521, fee:null, dog:"yes",
+   status:"Active · $38K price drop · as-is", notes:"Longmead Crossing, sold strictly as-is: get an inspection. Map pin is approximate."},
+  {id:"c12", type:"condo", addr:"2503 McVeary Ct #D", city:"Aspen Hill", zip:"20906", price:220000, bd:3, ba:2, sf:1043, lat:39.1029, lon:-77.0517, fee:null, dog:"yes",
+   status:"Coming soon Nov 23", notes:"Longmead Crossing, 3 bedrooms and 2 baths. Map pin is approximate."},
+  {id:"c13", type:"condo", addr:"2505 Baltimore Rd #7", city:"Rockville", zip:"20853", price:214999, bd:2, ba:1, sf:1085, lat:39.093768, lon:-77.113142, fee:null, dog:"check",
+   status:"Active", notes:"Seller offered $210K for offers by Nov 9: ask if that still stands. Map pin may be off; check the address."},
+  {id:"c14", top:1, type:"condo", addr:"18519 Boysenberry Dr #253", city:"Montgomery Village", zip:"20879", price:219900, bd:2, ba:2, sf:1070, lat:39.161134, lon:-77.206754, fee:662, dog:"yes",
+   status:"Active · now $219,900 (was $209,900)", notes:"Breckenridge. Best roommate layout: 2 full baths, washer/dryer, ground floor. Fully renovated. 25–30 min to Kensington."},
+  {id:"c15", type:"condo", addr:"18529 Boysenberry Dr #303", city:"Montgomery Village", zip:"20879", price:218000, bd:2, ba:2, sf:903, lat:39.160855, lon:-77.206203, fee:662, dog:"yes",
+   status:"Active", notes:"Breckenridge. Top floor, vaulted ceiling, fireplace. Dogs with no restrictions. Not FHA."},
+  {id:"c16", type:"condo", addr:"18503 Boysenberry Dr #127", city:"Montgomery Village", zip:"20879", price:200000, bd:2, ba:1, sf:817, lat:39.160469, lon:-77.207031, fee:621, dog:"yes",
+   status:"Active", notes:"Breckenridge. Dogs OK, washer/dryer in unit, FHA approved."},
+  {id:"c17", type:"condo", addr:"18503 Boysenberry Dr #121", city:"Montgomery Village", zip:"20879", price:195000, bd:2, ba:1, sf:817, lat:39.16035, lon:-77.20715, fee:null, dog:"yes",
+   status:"Active · $5K price drop", notes:"Breckenridge, same building as #127."},
+  {id:"c18", type:"condo", addr:"9900 Boysenberry Way #270-6", city:"Montgomery Village", zip:"20879", price:215000, bd:2, ba:1, sf:817, lat:39.160884, lon:-77.206274, fee:null, dog:"yes",
+   status:"Active", notes:"Breckenridge."},
+  {id:"c19", type:"condo", addr:"10106 Little Pond Pl #5", city:"Montgomery Village", zip:"20886", price:192900, bd:2, ba:2, sf:1121, lat:39.166737, lon:-77.208236, fee:802, dog:"limit",
+   status:"Active · $12K price drop", notes:"Each bedroom has its own full bath, washer/dryer in unit, 2 parking spaces. Fee includes electric, gas and water. Dog weight limit."},
+  {id:"c20", type:"condo", addr:"9836 Hellingly Pl", city:"Montgomery Village", zip:"20886", price:185000, bd:2, ba:1, sf:847, lat:39.159271, lon:-77.203512, fee:null, dog:"check",
+   status:"Active · $15K price drop", notes:"Smaller 2-bedroom; ask about fee and pets."},
+  {id:"c21", type:"condo", addr:"726 Quince Orchard Blvd #726-102", city:"Gaithersburg", zip:"20878", price:155000, bd:2, ba:2, sf:1110, lat:39.1424, lon:-77.2268, fee:null, dog:"check",
+   status:"Active · $15K price drop", notes:"Diamond Farm. Lowest price on the list, 2 full baths, updated kitchen and baths. Fees here usually include utilities. Map pin is approximate."}
+];
+
+/* ====================================================================== */
+const $ = s => document.querySelector(s);
+const usd = n => "$" + Math.round(n).toLocaleString("en-US");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const TYPE = {condo:["Condo","t-condo","#2b6cb0"], town:["Townhouse","t-town","#1d7a3e"], house:["House","t-house","#c05621"]};
+const DOG = {yes:["Dogs OK","good"], limit:["Dogs: limits","warn"], check:["Dogs: check","warn"]};
+
+function miles(a, b){
+  const R = 3958.8, r = Math.PI/180;
+  const dLat = (b.lat-a.lat)*r, dLon = (b.lon-a.lon)*r;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+const fullAddr = h => `${h.addr}, ${h.city}, MD ${h.zip}`;
+const gDir = h => "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(h.lat + "," + h.lon);
+const aDir = h => "https://maps.apple.com/?daddr=" + encodeURIComponent(h.lat + "," + h.lon) + "&q=" + encodeURIComponent(h.addr);
+const wDir = h => "https://waze.com/ul?ll=" + h.lat + "%2C" + h.lon + "&navigate=yes";
+const listingLink = h => "https://www.google.com/search?q=" + encodeURIComponent(fullAddr(h) + " for sale");
+
+/* ---- per-phone storage (notes, visited, tour) ---- */
+const store = {
+  get(k, d){ try { return JSON.parse(localStorage.getItem("hf_" + k)) ?? d; } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem("hf_" + k, JSON.stringify(v)); } catch(e){} }
+};
+let notes = store.get("notes", {}), visited = store.get("visited", {}), tour = store.get("tour", []);
+let me = null;
+const state = {type:"all", sort:"kens", bath:false, dog:false, hide:false};
+
+/* ---- map ---- */
+const map = L.map("map", {zoomControl:true}).setView([39.08, -77.10], 11);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
+}).addTo(map);
+
+L.marker([KENSINGTON.lat, KENSINGTON.lon], {
+  icon: L.divIcon({className:"", html:'<div style="font-size:22px;line-height:22px">⭐</div>', iconSize:[22,22], iconAnchor:[11,11]})
+}).addTo(map).bindPopup("<b>Kensington</b><br>Reference point for distances");
+
+const legend = L.control({position:"bottomleft"});
+legend.onAdd = () => { const d = L.DomUtil.create("div","legend");
+  d.innerHTML = Object.values(TYPE).map(t => `<span class="dot" style="background:${t[2]}"></span>${t[0]}`).join("<br>") + "<br>⭐ Kensington";
+  return d; };
+legend.addTo(map);
+
+const markers = {};
+HOMES.forEach(h => {
+  const m = L.circleMarker([h.lat, h.lon], {radius: h.top ? 10 : 8, color:"#fff", weight:2, fillColor: TYPE[h.type][2], fillOpacity:.95});
+  m.bindPopup(() => `<b>${usd(h.price)}</b> · ${TYPE[h.type][0]}<br>${esc(h.addr)}<br>${h.bd} bd / ${h.ba} ba${h.sf ? " · " + h.sf + " sf" : ""}<br>
+    <a href="${gDir(h)}" target="_blank" rel="noopener">Directions</a> · <a href="#" onclick="showCard('${h.id}');return false;">Details</a>`);
+  m.addTo(map); markers[h.id] = m;
+});
+
+let meMarker = null;
+function locate(){
+  if (!navigator.geolocation){ alertBar("This browser can't share your location."); return; }
+  navigator.geolocation.getCurrentPosition(p => {
+    me = {lat:p.coords.latitude, lon:p.coords.longitude};
+    if (meMarker) map.removeLayer(meMarker);
+    meMarker = L.marker([me.lat, me.lon], {icon: L.divIcon({className:"", html:'<div class="me"></div>', iconSize:[22,22], iconAnchor:[11,11]})}).addTo(map).bindPopup("You are here");
+    state.sort = "me"; $("#sort").value = "me";
+    map.setView([me.lat, me.lon], 12);
+    render();
+  }, () => alertBar("Location is off. Allow location for this site in your phone's browser settings."), {enableHighAccuracy:true, timeout:10000});
+}
+function alertBar(msg){ $("#count").textContent = msg; }
+
+/* ---- list ---- */
+function visible(){
+  return HOMES.filter(h =>
+    (state.type === "all" || h.type === state.type) &&
+    (!state.bath || h.ba >= 2) &&
+    (!state.dog || h.dog === "yes") &&
+    (!state.hide || !visited[h.id]));
+}
+function render(){
+  const ref = (state.sort === "me" && me) ? me : KENSINGTON;
+  const items = visible().map(h => ({...h, dK: miles(KENSINGTON, h), dMe: me ? miles(me, h) : null}));
+  items.sort((a,b) => state.sort === "price" ? a.price - b.price : miles(ref, a) - miles(ref, b));
+
+  HOMES.forEach(h => {
+    const on = items.some(i => i.id === h.id);
+    if (on && !map.hasLayer(markers[h.id])) markers[h.id].addTo(map);
+    if (!on && map.hasLayer(markers[h.id])) map.removeLayer(markers[h.id]);
+  });
+
+  $("#list").innerHTML = items.map(h => `
+  <article class="card${h.top ? " top" : ""}${tour.includes(h.id) ? " sel" : ""}" id="card-${h.id}">
+    <div class="row">
+      <div><div class="addr">${esc(h.addr)}</div><div class="where">${esc(h.city)}, MD ${h.zip}</div></div>
+      <div class="price">${usd(h.price)}<small>${esc(h.status)}</small></div>
+    </div>
+    <div class="chips">
+      ${h.top ? '<span class="chip pick">Top pick</span>' : ""}
+      <span class="chip ${TYPE[h.type][1]}">${TYPE[h.type][0]}</span>
+      <span class="chip">${h.bd} bd / ${h.ba} ba${h.sf ? " · " + h.sf.toLocaleString() + " sf" : ""}</span>
+      <span class="chip">${h.dK.toFixed(1)} mi to Kensington</span>
+      ${h.dMe != null ? `<span class="chip">${h.dMe.toFixed(1)} mi from you</span>` : ""}
+      <span class="chip ${DOG[h.dog][1]}">${DOG[h.dog][0]}</span>
+      ${h.fee ? `<span class="chip">Fee ${usd(h.fee)}/mo</span>` : ""}
+      ${visited[h.id] ? '<span class="chip good">Visited ✓</span>' : ""}
+    </div>
+    <p class="notes">${esc(h.notes)}</p>
+    <div class="btns">
+      <a class="go" href="${gDir(h)}" target="_blank" rel="noopener">Google Maps</a>
+      <a href="${aDir(h)}" target="_blank" rel="noopener">Apple Maps</a>
+      <a href="${wDir(h)}" target="_blank" rel="noopener">Waze</a>
+    </div>
+    <div class="btns">
+      <button type="button" onclick="toggleTour('${h.id}')">${tour.includes(h.id) ? "✓ In tour" : "+ Add to tour"}</button>
+      <button type="button" onclick="toggleVisited('${h.id}')">${visited[h.id] ? "Unmark visited" : "Mark visited"}</button>
+      <button type="button" onclick="zoomTo('${h.id}')">Show on map</button>
+      <a href="${listingLink(h)}" target="_blank" rel="noopener">Listing ↗</a>
+    </div>
+    <div class="mine"><textarea placeholder="Your notes (saved on this phone)" oninput="saveNote('${h.id}', this.value)">${esc(notes[h.id] || "")}</textarea></div>
+  </article>`).join("") || '<p class="foot">No homes match these filters.</p>';
+
+  $("#count").textContent = `${items.length} of ${HOMES.length}`;
+  renderTour();
+}
+
+/* ---- actions ---- */
+function zoomTo(id){ const h = HOMES.find(x => x.id === id); map.setView([h.lat, h.lon], 15); markers[id].openPopup(); window.scrollTo({top:0, behavior:"smooth"}); }
+function showCard(id){ const el = document.getElementById("card-" + id); if (el) el.scrollIntoView({behavior:"smooth", block:"center"}); }
+function saveNote(id, v){ notes[id] = v; store.set("notes", notes); }
+function toggleVisited(id){ visited[id] = !visited[id]; if (!visited[id]) delete visited[id]; store.set("visited", visited); render(); }
+function toggleTour(id){ tour = tour.includes(id) ? tour.filter(x => x !== id) : [...tour, id]; store.set("tour", tour); render(); }
+
+/* Tour: order stops by nearest-next from your location (or Kensington), open as one Google Maps route. */
+function renderTour(){
+  const box = $("#tour");
+  if (!tour.length){ box.classList.remove("show"); return; }
+  box.classList.add("show");
+  let cur = me || KENSINGTON, left = HOMES.filter(h => tour.includes(h.id)), order = [];
+  while (left.length){ left.sort((a,b) => miles(cur,a) - miles(cur,b)); cur = left.shift(); order.push(cur); }
+  const pts = order.map(h => h.lat + "," + h.lon);
+  const dest = pts.pop();
+  let url = "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=" + encodeURIComponent(dest);
+  if (pts.length) url += "&waypoints=" + encodeURIComponent(pts.join("|"));
+  $("#tourGo").href = url;
+  $("#tourGo").textContent = `Start tour (${order.length} stop${order.length > 1 ? "s" : ""})`;
+}
+$("#clearTour").onclick = () => { tour = []; store.set("tour", tour); render(); };
+
+/* ---- controls ---- */
+$("#locate").onclick = locate;
+document.querySelectorAll("#typeSeg button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#typeSeg button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on"); state.type = b.dataset.t; render();
+});
+$("#sort").onchange = e => { state.sort = e.target.value; if (state.sort === "me" && !me) locate(); else render(); };
+$("#fBath").onchange = e => { state.bath = e.target.checked; render(); };
+$("#fDog").onchange = e => { state.dog = e.target.checked; render(); };
+$("#fHide").onchange = e => { state.hide = e.target.checked; render(); };
+$("#asof").textContent = AS_OF;
+
+render();
+map.fitBounds(L.latLngBounds(HOMES.map(h => [h.lat, h.lon]).concat([[KENSINGTON.lat, KENSINGTON.lon]])), {padding:[20,20]});
+</script>
+</body>
+</html>
